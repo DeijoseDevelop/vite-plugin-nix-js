@@ -1,6 +1,6 @@
 {
   "name": "@deijose/vite-plugin-nix-js",
-  "version": "0.2.11",
+  "version": "1.0.0",
   "description": "Vite plugin for Nix.js with Hot Module Replacement and full state preservation (signals, stores, routers, forms)",
   "license": "MIT",
   "author": "Deiver Vasquez",

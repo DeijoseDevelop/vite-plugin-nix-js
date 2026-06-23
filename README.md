@@ -87,10 +87,39 @@ The runtime keeps a global singleton on `window.__nixHmrRuntime` that re-uses ex
 
 - **Multiple mount points** in the same file.
 - **Mount assigned to a variable** (`const handle = mount(...)`) as well as bare `mount(...)` statements.
-- **Module-scoped stores and routers**, including named exports.
+- **Module-scoped signals, forms, stores, and routers**.
+- **Named exports** and **aliased imports**.
+- **TypeScript** annotations, `as`, `satisfies` and parenthesized expressions.
 - **Async components** (`mount(await loadApp(), "#app")`).
 
-Stores and routers declared **inside functions** are intentionally left untouched, so they still produce a fresh instance on each call.
+Signals, forms, stores, and routers declared **inside functions** are intentionally left untouched, so they still produce a fresh instance on each call.
+
+## Common patterns
+
+Keep state at module scope so it is preserved across updates:
+
+```ts
+import { signal, html } from "@deijose/nix-js";
+
+// ✅ Preserved
+const count = signal(0);
+
+function Counter() {
+  return html`<button @click=${() => count.update((v) => v + 1)}>${() => count.value}</button>`;
+}
+```
+
+Avoid declaring state inside the component if you want it to survive HMR:
+
+```ts
+function Counter() {
+  // ❌ Reset on every update
+  const count = signal(0);
+  return html`<button @click=${() => count.update((v) => v + 1)}>${() => count.value}</button>`;
+}
+```
+
+For class components, store shared state in a module-scoped `createStore` or `signal`.
 
 ## Known limitations
 

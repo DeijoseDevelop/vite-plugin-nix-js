@@ -66,6 +66,92 @@ mount(Counter, "#app");
         const code = `console.log("hello");`;
         expect(transform(code, "src/util.ts")).toBeNull();
     });
+
+    it("detects signals from @deijose/nix-js/signals", () => {
+        const code = `
+import { signal } from "@deijose/nix-js/signals";
+import { mount } from "@deijose/nix-js";
+const count = signal(0);
+mount(App, "#app");
+`;
+        const out = transform(code, "src/app.ts")!;
+        expect(out).toContain('__nixGetOrCreateSignal("src/app.ts:count"');
+    });
+
+    it("detects forms from @deijose/nix-js/form", () => {
+        const code = `
+import { createForm } from "@deijose/nix-js/form";
+import { mount } from "@deijose/nix-js";
+const form = createForm({ name: "" });
+mount(App, "#app");
+`;
+        const out = transform(code, "src/app.ts")!;
+        expect(out).toContain('__nixGetOrCreateForm("src/app.ts:form"');
+    });
+
+    it("wraps multiple mount points independently", () => {
+        const code = `
+import { mount } from "@deijose/nix-js";
+mount(App, "#app");
+mount(Widget, "#widget");
+`;
+        const out = transform(code, "src/app.ts")!;
+        expect(out).toContain('__nixMount("src/app.ts#0"');
+        expect(out).toContain('__nixMount("src/app.ts#1"');
+    });
+
+    it("wraps mount assigned to a variable", () => {
+        const code = `
+import { mount } from "@deijose/nix-js";
+const handle = mount(App, "#app");
+`;
+        const out = transform(code, "src/app.ts")!;
+        expect(out).toContain('const handle = __nixMount("src/app.ts#0"');
+    });
+
+    it("wraps async component mounts", () => {
+        const code = `
+import { mount } from "@deijose/nix-js";
+mount(await loadApp(), "#app");
+`;
+        const out = transform(code, "src/app.ts")!;
+        expect(out).toContain("async () =>");
+        expect(out).toContain("__nixMount");
+    });
+
+    it("does not transform non-nix signal-looking calls", () => {
+        const code = `
+import { mount } from "@deijose/nix-js";
+const signal = customSignalFactory();
+const count = signal(0);
+mount(App, "#app");
+`;
+        const out = transform(code, "src/app.ts")!;
+        expect(out).not.toContain("__nixGetOrCreateSignal");
+    });
+
+    it("handles aliased imports", () => {
+        const code = `
+import { signal as s, createForm as f, mount as m } from "@deijose/nix-js";
+const count = s(0);
+const form = f({ name: "" });
+m(App, "#app");
+`;
+        const out = transform(code, "src/app.ts")!;
+        expect(out).toContain('__nixGetOrCreateSignal("src/app.ts:count"');
+        expect(out).toContain('__nixGetOrCreateForm("src/app.ts:form"');
+        expect(out).toContain("__nixMount");
+    });
+
+    it("supports TypeScript type annotations", () => {
+        const code = `
+import { signal, mount } from "@deijose/nix-js";
+const count: Signal<number> = signal(0) as any;
+mount(App, "#app");
+`;
+        const out = transform(code, "src/app.ts")!;
+        expect(out).toContain('__nixGetOrCreateSignal("src/app.ts:count"');
+    });
 });
 
 describe("HMR runtime", () => {

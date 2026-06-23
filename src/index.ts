@@ -89,6 +89,17 @@ function makeRuntimeImport(needed: string[]): t.ImportDeclaration {
   return t.importDeclaration(specifiers, t.stringLiteral("@deijose/vite-plugin-nix-js/runtime"));
 }
 
+// Strip TypeScript-only wrappers so we can inspect the underlying expression.
+function unwrapExpression(node: t.Node): t.Node {
+  if (t.isTSAsExpression(node) || t.isTSSatisfiesExpression(node) || t.isTSTypeAssertion(node)) {
+    return unwrapExpression(node.expression);
+  }
+  if (t.isParenthesizedExpression(node)) {
+    return unwrapExpression(node.expression);
+  }
+  return node;
+}
+
 function hmrTransform(code: string, fileId: string): string | null {
   const names = getImportedNames(code);
   const hasNix = names.signal || names.createForm || names.createStore || names.createRouter || names.mount;
@@ -113,16 +124,18 @@ function hmrTransform(code: string, fileId: string): string | null {
     VariableDeclarator(nodePath: NodePath<t.VariableDeclarator>) {
       const idNode = nodePath.node.id;
       const initNode = nodePath.node.init;
-      if (!t.isIdentifier(idNode) || !initNode || !t.isCallExpression(initNode)) return;
-      if (!t.isIdentifier(initNode.callee)) return;
+      if (!t.isIdentifier(idNode) || !initNode) return;
 
-      // Only preserve stores/routers declared at module scope. Declarations
-      // inside functions are meant to create fresh instances on each call and
-      // must not be hoisted into the global HMR registry.
+      const unwrapped = unwrapExpression(initNode);
+      if (!t.isCallExpression(unwrapped) || !t.isIdentifier(unwrapped.callee)) return;
+
+      // Only preserve declarations at module scope. Declarations inside
+      // functions are meant to create fresh instances on each call and must
+      // not be hoisted into the global HMR registry.
       if (nodePath.getFunctionParent()) return;
 
       const localName = idNode.name;
-      const callee = initNode.callee.name;
+      const callee = unwrapped.callee.name;
 
       if (names.signal && callee === names.signal) {
         const signalId = `${fileId}:${localName}`;

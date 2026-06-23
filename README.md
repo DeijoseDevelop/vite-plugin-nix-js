@@ -5,7 +5,7 @@ Vite plugin for [Nix.js](https://nix-js.dev/) that adds Hot Module Replacement (
 ## Requirements
 
 - Vite `^8.0.0`
-- `@deijose/nix-js` `^2.5.1`
+- `@deijose/nix-js` `^2.5.3`
 
 ## Installation
 
@@ -44,6 +44,8 @@ The plugin transforms source files at build time to wrap stable calls with a sma
 
 | Call | Wrapped to |
 |------|------------|
+| `signal(...)` | `__nixGetOrCreateSignal(id, factory)` |
+| `createForm(...)` | `__nixGetOrCreateForm(id, factory)` |
 | `createStore(...)` | `__nixGetOrCreateStore(id, factory)` |
 | `createRouter(...)` | `__nixGetOrCreateRouter(id, factory)` |
 | `mount(...)` | `__nixMount(id, factory, ...)` |
@@ -51,6 +53,11 @@ The plugin transforms source files at build time to wrap stable calls with a sma
 For example, this developer-written code:
 
 ```ts
+import { signal } from "@deijose/nix-js";
+import { createForm } from "@deijose/nix-js/form";
+
+const count = signal(0);
+const form = createForm({ name: "" });
 const cart = createStore({ items: [] }, { name: "cart" });
 const router = createRouter(routes);
 mount(App(), "#app", { router });
@@ -59,8 +66,10 @@ mount(App(), "#app", { router });
 is transformed into:
 
 ```ts
-import { __nixGetOrCreateStore, __nixGetOrCreateRouter, __nixMount, __nixHmrAccept } from "@deijose/vite-plugin-nix-js/runtime";
+import { __nixGetOrCreateSignal, __nixGetOrCreateForm, __nixGetOrCreateStore, __nixGetOrCreateRouter, __nixMount, __nixHmrAccept } from "@deijose/vite-plugin-nix-js/runtime";
 
+const count = __nixGetOrCreateSignal("src/main.ts:count", () => signal(0));
+const form = __nixGetOrCreateForm("src/main.ts:form", () => createForm({ name: "" }));
 const cart = __nixGetOrCreateStore("src/main.ts:cart", () => createStore({ items: [] }, { name: "cart" }));
 const router = __nixGetOrCreateRouter("src/main.ts:router", () => createRouter(routes));
 __nixMount("src/main.ts", () => App(), "#app", { router });
@@ -85,8 +94,9 @@ Stores and routers declared **inside functions** are intentionally left untouche
 
 ## Known limitations
 
-- Component-level state preservation (as opposed to global store/router state) is not yet implemented.
-- Only top-level `mount` calls are tracked; mounts nested inside render functions are left untouched.
+- `NixComponent` class instance state (private properties set in `onInit`/`onMount`) is not preserved across HMR updates.
+- HMR is module-granular: when a file changes, every mount point declared in that file is re-mounted.
+- Only module-scoped `signal`, `createForm`, `createStore`, `createRouter`, and `mount` calls are tracked; declarations nested inside functions are left untouched.
 
 ## Development
 

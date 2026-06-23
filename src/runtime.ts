@@ -13,6 +13,16 @@ export interface NixMountRecord {
   handle?: NixMountHandle;
 }
 
+export interface NixSignalRecord {
+  id: string;
+  signal: unknown;
+}
+
+export interface NixFormRecord {
+  id: string;
+  form: unknown;
+}
+
 export interface NixStoreRecord {
   id: string;
   store: unknown;
@@ -25,6 +35,8 @@ export interface NixRouterRecord {
 
 export interface NixHmrRuntime {
   mounts: Map<string, NixMountRecord>;
+  signals: Map<string, NixSignalRecord>;
+  forms: Map<string, NixFormRecord>;
   stores: Map<string, NixStoreRecord>;
   routers: Map<string, NixRouterRecord>;
   pendingScroll: { x: number; y: number } | null;
@@ -41,6 +53,8 @@ export function getNixHmrRuntime(): NixHmrRuntime {
   if (!window.__nixHmrRuntime) {
     window.__nixHmrRuntime = {
       mounts: new Map(),
+      signals: new Map(),
+      forms: new Map(),
       stores: new Map(),
       routers: new Map(),
       pendingScroll: null,
@@ -88,6 +102,22 @@ export function __nixMount(
   };
   runtime.mounts.set(id, record);
   mountInto(record);
+}
+
+export function __nixGetOrCreateSignal<T>(id: string, factory: () => T): T {
+  const existing = runtime.signals.get(id);
+  if (existing) return existing.signal as T;
+  const signal = factory();
+  runtime.signals.set(id, { id, signal });
+  return signal;
+}
+
+export function __nixGetOrCreateForm<T>(id: string, factory: () => T): T {
+  const existing = runtime.forms.get(id);
+  if (existing) return existing.form as T;
+  const form = factory();
+  runtime.forms.set(id, { id, form });
+  return form;
 }
 
 export function __nixGetOrCreateStore<T>(id: string, factory: () => T): T {

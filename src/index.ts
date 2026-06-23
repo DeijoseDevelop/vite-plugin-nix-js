@@ -27,20 +27,28 @@ export interface NixPluginOptions {
   devtools?: boolean;
 }
 
-const NIX_IMPORTS = ["@deijose/nix-js", "@deijose/nix-js/store", "@deijose/nix-js/router"];
+const NIX_IMPORTS = [
+  "@deijose/nix-js",
+  "@deijose/nix-js/signals",
+  "@deijose/nix-js/store",
+  "@deijose/nix-js/router",
+  "@deijose/nix-js/form",
+];
 
 function isNixImport(source: string): boolean {
   return NIX_IMPORTS.some((imp) => source === imp || source.startsWith(`${imp}/`));
 }
 
 interface ImportedNames {
+  signal: string | null;
+  createForm: string | null;
   createStore: string | null;
   createRouter: string | null;
   mount: string | null;
 }
 
 function getImportedNames(code: string): ImportedNames {
-  const names: ImportedNames = { createStore: null, createRouter: null, mount: null };
+  const names: ImportedNames = { signal: null, createForm: null, createStore: null, createRouter: null, mount: null };
 
   let ast: t.File;
   try {
@@ -61,6 +69,8 @@ function getImportedNames(code: string): ImportedNames {
         if (t.isImportSpecifier(specifier) && t.isIdentifier(specifier.imported)) {
           const importedName = specifier.imported.name;
           const localName = specifier.local.name;
+          if (importedName === "signal") names.signal = localName;
+          if (importedName === "createForm") names.createForm = localName;
           if (importedName === "createStore") names.createStore = localName;
           if (importedName === "createRouter") names.createRouter = localName;
           if (importedName === "mount") names.mount = localName;
@@ -81,7 +91,7 @@ function makeRuntimeImport(needed: string[]): t.ImportDeclaration {
 
 function hmrTransform(code: string, fileId: string): string | null {
   const names = getImportedNames(code);
-  const hasNix = names.createStore || names.createRouter || names.mount;
+  const hasNix = names.signal || names.createForm || names.createStore || names.createRouter || names.mount;
   if (!hasNix) return null;
 
   let ast: t.File;
@@ -113,6 +123,28 @@ function hmrTransform(code: string, fileId: string): string | null {
 
       const localName = idNode.name;
       const callee = initNode.callee.name;
+
+      if (names.signal && callee === names.signal) {
+        const signalId = `${fileId}:${localName}`;
+        const arrow = t.arrowFunctionExpression([], t.blockStatement([t.returnStatement(initNode)]));
+        nodePath.node.init = t.callExpression(t.identifier("__nixGetOrCreateSignal"), [
+          t.stringLiteral(signalId),
+          arrow,
+        ]);
+        if (!runtimeImports.includes("__nixGetOrCreateSignal")) runtimeImports.push("__nixGetOrCreateSignal");
+        return;
+      }
+
+      if (names.createForm && callee === names.createForm) {
+        const formId = `${fileId}:${localName}`;
+        const arrow = t.arrowFunctionExpression([], t.blockStatement([t.returnStatement(initNode)]));
+        nodePath.node.init = t.callExpression(t.identifier("__nixGetOrCreateForm"), [
+          t.stringLiteral(formId),
+          arrow,
+        ]);
+        if (!runtimeImports.includes("__nixGetOrCreateForm")) runtimeImports.push("__nixGetOrCreateForm");
+        return;
+      }
 
       if (names.createStore && callee === names.createStore) {
         const storeId = `${fileId}:${localName}`;

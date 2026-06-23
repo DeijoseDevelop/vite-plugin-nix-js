@@ -1,0 +1,162 @@
+import { mount, type NixComponent, type NixMountHandle, type NixTemplate } from "@deijose/nix-js";
+
+export type NixComponentFactory = () =>
+  | NixTemplate
+  | NixComponent
+  | Promise<NixTemplate | NixComponent>;
+
+export interface NixMountRecord {
+  id: string;
+  factory: NixComponentFactory;
+  container: Element | string;
+  options?: Record<string, unknown>;
+  handle?: NixMountHandle;
+}
+
+export interface NixStoreRecord {
+  id: string;
+  store: unknown;
+}
+
+export interface NixRouterRecord {
+  id: string;
+  router: unknown;
+}
+
+export interface NixHmrRuntime {
+  mounts: Map<string, NixMountRecord>;
+  stores: Map<string, NixStoreRecord>;
+  routers: Map<string, NixRouterRecord>;
+  pendingScroll: { x: number; y: number } | null;
+  pendingFocus: string | null;
+}
+
+declare global {
+  interface Window {
+    __nixHmrRuntime?: NixHmrRuntime;
+  }
+}
+
+export function getNixHmrRuntime(): NixHmrRuntime {
+  if (!window.__nixHmrRuntime) {
+    window.__nixHmrRuntime = {
+      mounts: new Map(),
+      stores: new Map(),
+      routers: new Map(),
+      pendingScroll: null,
+      pendingFocus: null,
+    };
+  }
+  return window.__nixHmrRuntime;
+}
+
+const runtime = getNixHmrRuntime();
+
+function mountInto(record: NixMountRecord): void {
+  const result = record.factory();
+  if (result instanceof Promise) {
+    result.then((component) => {
+      record.handle = mount(component, record.container, record.options);
+    });
+  } else {
+    record.handle = mount(result, record.container, record.options);
+  }
+}
+
+export function __nixMount(
+  id: string,
+  factory: NixComponentFactory,
+  container: Element | string,
+  options?: Record<string, unknown>
+): void {
+  const existing = runtime.mounts.get(id);
+
+  if (existing) {
+    existing.factory = factory;
+    existing.container = container;
+    existing.options = options;
+    existing.handle?.unmount();
+    mountInto(existing);
+    return;
+  }
+
+  const record: NixMountRecord = {
+    id,
+    factory,
+    container,
+    options,
+  };
+  runtime.mounts.set(id, record);
+  mountInto(record);
+}
+
+export function __nixGetOrCreateStore<T>(id: string, factory: () => T): T {
+  const existing = runtime.stores.get(id);
+  if (existing) return existing.store as T;
+  const store = factory();
+  runtime.stores.set(id, { id, store });
+  return store;
+}
+
+export function __nixGetOrCreateRouter<T>(id: string, factory: () => T): T {
+  const existing = runtime.routers.get(id);
+  if (existing) return existing.router as T;
+  const router = factory();
+  runtime.routers.set(id, { id, router });
+  return router;
+}
+
+export function __nixSaveSnapshot(): {
+  scroll: { x: number; y: number };
+  focus: string | null;
+  router: unknown;
+  stores: Array<[string, unknown]>;
+} {
+  const activeElement = document.activeElement;
+  return {
+    scroll: {
+      x: window.scrollX,
+      y: window.scrollY,
+    },
+    focus: activeElement && activeElement.id ? `#${activeElement.id}` : null,
+    router: null,
+    stores: Array.from(runtime.stores.entries()).map(([id, record]) => [id, record.store]),
+  };
+}
+
+export function __nixRestoreSnapshot(snapshot: ReturnType<typeof __nixSaveSnapshot>): void {
+  runtime.pendingScroll = snapshot.scroll;
+  runtime.pendingFocus = snapshot.focus;
+
+  // Schedule scroll/focus restoration after the next paint
+  requestAnimationFrame(() => {
+    if (runtime.pendingScroll) {
+      window.scrollTo(runtime.pendingScroll.x, runtime.pendingScroll.y);
+      runtime.pendingScroll = null;
+    }
+    if (runtime.pendingFocus) {
+      const el = document.querySelector(runtime.pendingFocus) as HTMLElement | null;
+      el?.focus();
+      runtime.pendingFocus = null;
+    }
+  });
+}
+
+export function __nixHmrAccept(_newModule: unknown, moduleId: string): void {
+  // A module may declare several mount points. Each is registered with an id
+  // shaped like `${moduleId}#${index}`, so re-mount every record that belongs
+  // to this module.
+  const prefix = `${moduleId}#`;
+  const records: NixMountRecord[] = [];
+  for (const [id, record] of runtime.mounts) {
+    if (id === moduleId || id.startsWith(prefix)) records.push(record);
+  }
+  if (!records.length) return;
+
+  const snapshot = __nixSaveSnapshot();
+  for (const record of records) {
+    record.handle?.unmount();
+    mountInto(record);
+  }
+  __nixRestoreSnapshot(snapshot);
+}

@@ -1,0 +1,69 @@
+{
+  "name": "@deijose/vite-plugin-nix-js",
+  "version": "0.2.7",
+  "description": "Vite plugin for Nix.js with Hot Module Replacement and session preservation",
+  "license": "MIT",
+  "author": "Deiver Vasquez",
+  "homepage": "https://github.com/DeijoseDevelop/vite-plugin-nix-js#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DeijoseDevelop/vite-plugin-nix-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DeijoseDevelop/vite-plugin-nix-js/issues"
+  },
+  "type": "module",
+  "keywords": [
+    "vite",
+    "plugin",
+    "nix-js",
+    "hmr",
+    "hot-module-replacement"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js",
+      "require": "./dist/runtime.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc --noEmit && vite build && tsc --emitDeclarationOnly",
+    "dev": "vite build --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@babel/core": "^7.26.0",
+    "@babel/generator": "^7.26.0",
+    "@babel/parser": "^7.26.0",
+    "@babel/traverse": "^7.26.0",
+    "@babel/types": "^7.26.0"
+  },
+  "peerDependencies": {
+    "vite": "^8.0.0",
+    "@deijose/nix-js": "^2.5.1"
+  },
+  "devDependencies": {
+    "@types/babel__core": "^7.20.5",
+    "@types/babel__generator": "^7.6.8",
+    "@types/babel__traverse": "^7.20.6",
+    "@types/node": "^22.0.0",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.0"
+  }
+}
